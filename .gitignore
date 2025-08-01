@@ -1,0 +1,38 @@
+# Java related
+target/**
+*.war
+*.ear
+*.class
+
+# eclipse specific
+*.pydevproject
+.project
+.metadata
+bin/**
+bin/
+tmp/**
+tmp/**/*
+*.tmp
+*.bak
+*.swp
+*~.nib
+local.properties
+.classpath
+.settings/
+.loadpath
+
+# External tool builders
+.externalToolBuilders/
+
+# Locally stored "Eclipse launch configurations"
+*.launch
+
+# Specific ignore
+*.log*
+MJCompiler/spec/mjparser_astbuild.cup
+MJCompiler/src/rs/ac/bg/etf/pp1/Yylex.java
+MJCompiler/src/rs/ac/bg/etf/pp1/Yylex.java~
+MJCompiler/src/rs/ac/bg/etf/pp1/sym.java
+MJCompiler/src/rs/ac/bg/etf/pp1/MJParser.java
+MJCompiler/src/rs/ac/bg/etf/pp1/ast/
+MJCompiler/test/*.obj

@@ -1,0 +1,395 @@
+package rs.ac.bg.etf.pp1;
+
+import java_cup.runtime.*;
+import org.apache.log4j.*;
+import rs.ac.bg.etf.pp1.ast.*;
+
+
+
+parser code {:
+
+	boolean errorDetected = false;
+	
+	Logger log = Logger.getLogger(getClass());
+   
+   
+    // slede redefinisani metodi za prijavu gresaka radi izmene teksta poruke
+     
+    public void report_fatal_error(String message, Object info) throws java.lang.Exception {
+      done_parsing();
+      report_error(message, info);
+    }
+  
+    public void syntax_error(Symbol cur_token) {
+        report_error("\nSintaksna greska", cur_token);
+    }
+  
+    public void unrecovered_syntax_error(Symbol cur_token) throws java.lang.Exception {
+        report_fatal_error("Fatalna greska, parsiranje se ne moze nastaviti", cur_token);
+    }
+
+    public void report_error(String message, Object info) {
+    	errorDetected = true;
+    	StringBuilder msg = new StringBuilder(message); 
+    	if (info instanceof Symbol)
+            msg.append (" na liniji ").append(((Symbol)info).left);
+        log.error(msg.toString());
+    }
+    
+    public void report_info(String message, Object info) {
+    	StringBuilder msg = new StringBuilder(message); 
+    	if (info instanceof Symbol)
+            msg.append (" na liniji ").append(((Symbol)info).left);
+        log.info(msg.toString());
+    }
+	
+:}
+
+
+init with {:
+	errorDetected = false;
+:}
+
+
+scan with {:
+	Symbol s = this.getScanner().next_token();
+	if (s != null && s.value != null) 
+		log.info(s.toString() + " " + s.value.toString());
+	return s;
+:}
+
+
+
+//Grammar
+
+terminal 	PROG, LBRACE, RBRACE, CONST, ASSIGN, SEMI, COMMA, LBRACK, RBRACK,
+			CLASS, EXTENDS, INTERFACE, LPAREN, RPAREN, VOID, IF, BREAK, CONTINUE,
+			RETURN, READ, PRINT, WHILE, DO, ELSE, INC, DEC, OR, AND, MAP, MINUS,
+			NEW, DOT, EQ, NE, GT, GE, LT, LE, PLUS, MULT, DIV, MOD, UNION;
+terminal String IDENT;
+terminal Integer NUMBER, BOOL;
+terminal Character CHARACTER;
+
+nonterminal Program, ProgramName,
+			DeclList, MethodDeclList, ConstDecl, VarDecl, InterfaceDecl,
+			ConstChoice, ConstList,
+			VarIndexOpt, VarList,
+			ClassExtendOpt, ClassVarList, ClassMethodOpt, ClassMethodList,
+			InterfaceMethodList, InterfaceHeader,
+			MethodDecl, MethodSignature, MethodFormOpt,
+			MethodVarList, MethodStatementList,
+			FormPars, FormIndexOpt, FormTypeList,
+			Statement, StatementElseOpt, StatementExprOpt, StatementNumOpt, StatementStatementList,
+			StatementConditionOpt, StatementConditionOptDesignatorOpt,
+			DesignatorStatement, DesignatorChoice, ActParsOpt, LeftSideDesignatorStatement, FirstSet,
+			ActPars, ActParsExprList,
+			Condition, CondTerm, CondTermList, CondFact, CondFactList, CondFactExprOpt,
+			Label, DesignatorLBrack,
+			ExprTermList,
+			Term, TermFactorList, FactorOpt,
+			FactorDesignatorOpt, FactorNewChoice,
+			Assignop, Setop, Relop, Addop, Mulop,
+			LParenFactorNewChoice, DoWhileBegin,
+			ElseIdent, IfCondition, WhileNonTerm;
+			
+nonterminal rs.etf.pp1.symboltable.concepts.Struct Expr, Type, ClassDecl;
+nonterminal rs.etf.pp1.symboltable.concepts.Obj MethodChoice, Factor, Designator, ClassHeader;
+			
+
+precedence left ELSE;
+
+Program ::= (Program) PROG ProgramName DeclList LBRACE MethodDeclList RBRACE;
+
+ProgramName ::=	(ProgramName) IDENT;
+
+DeclList ::= 	(DeclList_Const) DeclList ConstDecl
+				|
+				(DeclList_Var) DeclList VarDecl
+				|
+				(DeclList_Class) DeclList ClassDecl
+				|
+				(DeclList_Interface) DeclList InterfaceDecl
+				|
+				(DeclList_Epsilon) 
+				;
+
+ConstDecl ::=	(ConstDecl) CONST Type ConstList SEMI;
+ConstChoice ::=	(ConstChoice_num) NUMBER 
+				|
+				(ConstChoice_char) CHARACTER
+				|
+				(ConstChoice_bool) BOOL
+				;
+ConstList ::=	(ConstList_) ConstList COMMA IDENT ASSIGN ConstChoice
+				|
+				(ConstList_First) IDENT ASSIGN ConstChoice
+				;
+
+VarDecl ::=		(VarDecl) Type VarList SEMI;
+VarIndexOpt ::=	(VarIndexOpt_) LBRACK RBRACK
+				|
+				(VarIndexOpt_Epsilon)
+				;
+VarList ::= 	(VarList_Ident) VarList COMMA IDENT VarIndexOpt
+				|
+				(VarList_Type) IDENT VarIndexOpt 
+				|
+				(VarList_Error) error:e
+				{:
+	                parser.report_error("Oporavak od greske pri deklaraciji globalne promenljive, na lniji: " + eleft, null);
+	            :}
+				;
+
+ClassDecl ::= 		(ClassDecl) CLASS ClassHeader LBRACE ClassVarList ClassMethodOpt RBRACE;
+ClassHeader ::= 	(ClassHeader) IDENT ClassExtendOpt;
+ClassExtendOpt ::=	(ClasExtendOpt_) EXTENDS Type
+					|
+					(ClassExtendOpt_Epsilon)
+					|
+					(ClassExtendOpt_Error) error:e
+					{:
+		                parser.report_error("Oporavak od greske pri deklaraciji prosirenja natklase, na liniji: " + eleft, null);
+		            :}
+					;
+ClassVarList ::=	(ClassVarList_) ClassVarList VarDecl
+					|
+					(ClassVarList_Epsilon)
+					;
+ClassMethodOpt ::=	(ClassMethodOpt_) LBRACE ClassMethodList RBRACE
+					|
+					(ClassMethodOpt_Epsilon)
+					;
+ClassMethodList ::= (ClassMethodList_) ClassMethodList MethodDecl
+					|
+					(ClassMethodList_Epsilon)
+					;
+
+InterfaceDecl ::=		(InterfaceDecl) INTERFACE InterfaceHeader LBRACE InterfaceMethodList RBRACE;
+InterfaceHeader ::=		(InterfaceHeader) IDENT;
+InterfaceMethodList ::=	(InterfaceMethodList_Decl) InterfaceMethodList MethodDecl
+						|
+						(InterfaceMethodList_Signature) InterfaceMethodList MethodSignature SEMI
+						|
+						(InterfaceMethodList_Epsilon)
+						;
+
+MethodSignature ::=	(MethodSignature) MethodChoice LPAREN MethodFormOpt RPAREN;
+MethodChoice ::= 	(MethodChoice_Type) Type IDENT
+					|
+					(MethodChoice_Void) VOID IDENT
+					;
+MethodFormOpt ::= 	(MethodFormOpt_) FormPars
+					|
+					(MethodFormOpt_Epsilon)
+					;
+
+MethodDeclList ::=	 	(MethodDeclList_) MethodDeclList MethodDecl
+						|
+						(MethodDeclList_Epsilon)
+						;
+MethodDecl ::=			(MethodDecl) MethodSignature MethodVarList LBRACE MethodStatementList RBRACE;
+MethodVarList ::=		(MethodVarList_) MethodVarList VarDecl
+						|
+						(MethodVarList_Epsilon)
+						;
+MethodStatementList ::=	(MethodStatementList_) MethodStatementList Statement
+						|
+						(MethodStatementList_Epsilon)
+						;
+
+FormPars ::=		(FormPars) FormTypeList;
+FormIndexOpt ::=	(FormIndexOpt_) LBRACK RBRACK
+					|
+					(FormIndexOpt_Epsilon) 
+					;
+FormTypeList ::=	(FormTypeList_) FormTypeList COMMA Type IDENT FormIndexOpt
+					|
+					(FormTypeList_Epsilon) Type IDENT FormIndexOpt
+					|
+					(FormTypeList_Error) error:e
+					{:
+		                parser.report_error("Oporavak od greske pri deklaraciji formalnog parametra funkcije, na liniji: " + eleft, null);
+		            :}
+					;
+
+Type ::=	(Type) IDENT;
+
+Statement ::=	(Statement_Designator) DesignatorStatement SEMI
+				|
+				(Statement_If) IF LPAREN IfCondition RPAREN Statement StatementElseOpt
+				|
+				(Statement_Break) BREAK SEMI
+				|
+				(Statement_Continue) CONTINUE SEMI
+				|
+				(Statement_Return) RETURN StatementExprOpt SEMI
+				|
+				(Statement_Read) READ LPAREN Designator RPAREN SEMI
+				|
+				(Statement_Print) PRINT LPAREN Expr StatementNumOpt RPAREN SEMI
+				|
+				(Statement_Do) DoWhileBegin Statement WhileNonTerm LPAREN StatementConditionOpt RPAREN SEMI
+				|
+				(Statement_Statement) LBRACE StatementStatementList RBRACE
+				;
+WhileNonTerm ::= (WhileNonTerm) WHILE;
+IfCondition ::=	(IfCondition) Condition;
+DoWhileBegin ::=(DoWhileBegin) DO;				
+StatementElseOpt ::=		(StatementElseOpt_)	ElseIdent Statement
+							|
+							(StatementElseOpt_Epsilon)
+							;			
+ElseIdent ::=				(ElseIdent) ELSE;
+StatementExprOpt ::=		(StatementExprOpt_) Expr
+							|
+							(StatementExprOpt_Epsilon)
+							;
+StatementNumOpt ::=			(StatementNumOpt_) COMMA NUMBER
+							|
+							(StatementNumOpt_Epsilon)
+							;
+StatementConditionOpt ::= 				(StatementConditionOpt_) Condition StatementConditionOptDesignatorOpt
+										|
+										(StatementConditionOpt_Epsilon)
+										;
+StatementConditionOptDesignatorOpt ::=	(StatementConditionOptDesignatorOpt_) COMMA DesignatorStatement
+										|
+										(StatementConditionOptDesignatorOpt_Epsilon)
+										;
+StatementStatementList ::=	(StatementStatementList_) StatementStatementList Statement
+							|
+							(StatementStatementList_Epsilon)
+							;
+
+DesignatorStatement ::=			(Designator_Choice) LeftSideDesignatorStatement DesignatorChoice
+								|
+								(Designator_Designator) LeftSideDesignatorStatement Assignop FirstSet Setop Designator
+								|
+								(Designator_Error) error:e
+								{:
+					                parser.report_error("Oporavak od greske pri konstruktu dodele, na liniji: " + eleft, null);
+					            :}
+								;
+FirstSet ::=					(FirstSet) Designator;
+LeftSideDesignatorStatement::=	(LeftSideDesignatorStatement) Designator;								
+DesignatorChoice ::=			(DesignatorChoice_Assignop) Assignop Expr
+								|
+								(DesignatorChoice_ActPars) LPAREN ActParsOpt RPAREN
+								|
+								(DesignatorChoice_Inc) INC
+								|
+								(DesignatorChoice_Dec) DEC
+								;
+ActParsOpt ::=					(ActParsOpt_) ActPars
+								|
+								(ActParsOpt_Epsilon)
+								;
+
+ActPars ::=	(ActPars_) ActPars COMMA Expr
+			|
+			(ActPars_Epsilon) Expr
+			;
+					
+Condition ::=		(Condition_) CondTerm CondTermList
+					|
+					(Condition_Error) error:e
+					{:
+		                parser.report_error("Oporavak od greske pri logickom uslovu if konstrukcije, na liniji: " + eleft, null);
+		            :}
+		            ;
+CondTermList ::=	(CondTermList_) CondTermList OR CondTerm
+					|
+					(CondTermList_Epsilon)
+					;
+
+CondTerm ::=		(CondTerm) CondFact CondFactList;
+CondFactList ::=	(CondFactList_) CondFactList AND CondFact
+					|
+					(CondFactList_Epsilon) 
+					;
+					
+CondFact ::=		(CondFact) Expr CondFactExprOpt;
+CondFactExprOpt ::=	(CondFactExprOpt_) Relop Expr
+					|
+					(CondFactExprOpt_Epsilon)
+					;
+
+Expr ::=			(Expr_Term)  ExprTermList
+					|
+					(Expr_Map) Designator MAP Designator
+					;
+
+ExprTermList ::=	(ExprTermList_) ExprTermList Addop Term
+					|
+					(ExprTermList_Epsilon) Term
+					;
+
+Term ::=			(Term)  TermFactorList;
+TermFactorList ::=	(TermFactorList_) TermFactorList Mulop FactorOpt
+					|
+					(TermFactorList_FactorOpt) FactorOpt
+					;
+FactorOpt ::=		(FactorOpt_Minus) MINUS Factor
+					|
+					(FactorOpt_) Factor
+					;
+
+Factor ::=				(Factor_Designator) Designator FactorDesignatorOpt
+						|
+						(Factor_Number) NUMBER
+						|
+						(Factor_Character) CHARACTER
+						|
+						(Factor_Bool) BOOL
+						|
+						(Factor_New) NEW Type FactorNewChoice
+						|
+						(Factor_Expr) LPAREN Expr RPAREN
+						;
+FactorDesignatorOpt ::=	(FactorDesignatorOpt_) LPAREN ActParsOpt RPAREN
+						|
+						(FactorDesignatorOpt_Epsilon)
+						;
+FactorNewChoice ::=		(FactorNewChoice_Expr) LBRACK Expr RBRACK
+						|
+						(FactorNewChoice_ActPars) LParenFactorNewChoice ActParsOpt RPAREN
+						; 
+LParenFactorNewChoice ::=	(LParenFactorNewChoice) LPAREN;
+Designator ::=		(DesignatorList_Ident) Designator DOT IDENT
+					|
+					(DesignatorList_Expr) Designator DesignatorLBrack Expr RBRACK
+					|
+					(DesignatorList_Epsilon) IDENT
+					;
+DesignatorLBrack::= (DesignatorLBrack) LBRACK;
+
+Label ::=	(Label) IDENT;
+
+Assignop ::= (Assignop) ASSIGN;
+
+Relop ::=	(Relop_Eq) EQ
+			|
+			(Relop_Ne) NE
+			|
+			(Relop_Gt) GT
+			|
+			(Relop_GE) GE
+			|
+			(Relop_Lt) LT
+			|
+			(Relop_Le) LE
+			;	
+
+Addop ::=	(Addop_Plus) PLUS
+			|
+			(Addop_Minus) MINUS
+			;
+			
+Mulop ::=	(Mulop_Mult) MULT
+			|
+			(Mulop_Div) DIV
+			|
+			(Mulop_Mod) MOD
+			;
+
+Setop ::=	(Setop) UNION;
